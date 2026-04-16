@@ -174,6 +174,21 @@ FROM ai_forecast(
 -- Returns: date, sales_forecast, sales_upper, sales_lower
 ```
 
+## Scaling Best Practices
+
+AI Functions handle parallelization, retries, and scaling automatically within a query. Don't manually split data into Python-level batches — let the engine manage dispatch.
+
+1. **Let the engine handle parallelism** — within a query, AI Functions automatically parallelize dispatch to the Foundation Model API backend. Manually splitting data into Python-level batches can reduce throughput.
+2. **For large datasets, use Spark's incremental processing** — Structured Streaming with checkpoints, Lakeflow Declarative Pipelines, or bounded queries with natural partitioning (e.g., WHERE clauses on date ranges) provide checkpoint/resume and bounded resource usage. A single unbounded query on a massive table has no progress recovery if it fails. See [4-document-processing-pipeline.md](4-document-processing-pipeline.md) for streaming patterns.
+3. **Choose a batch-optimized model** — Databricks-hosted endpoints (prefixed with `databricks-`) are optimized for batch inference and scale without provisioning.
+4. **Ensure a reasonable partition count** — if data is in very few partitions (e.g., after `.coalesce(1)`), `.repartition(N)` lets multiple executor tasks issue concurrent requests. Once partition count is reasonable, adding more won't help — the model backend is the throughput ceiling.
+5. **Set `failOnError => false`** in production pipelines to preserve successful results and route errors to a sidecar table.
+6. **Use `LIMIT` during development** to validate prompts and control costs before full-scale runs.
+
+Python-level concurrency (`ThreadPoolExecutor`, `asyncio`, `multiprocessing`) around AI Function calls in SQL or PySpark is unnecessary — the engine already manages dispatch, batching, and retries. Adding a Python concurrency layer typically means pulling data to the driver first (`.collect()`), which bypasses all of this.
+
+> **Scope:** This applies to AI Functions called inside SQL and PySpark `expr()`. Python concurrency is still appropriate when calling Model Serving endpoints directly via REST or the SDK (e.g., from a FastAPI app or standalone script without Spark).
+
 ## Reference Files
 
 - [1-task-functions.md](1-task-functions.md) — Full syntax, parameters, SQL + PySpark examples for all 9 task-specific functions (`ai_analyze_sentiment`, `ai_classify`, `ai_extract`, `ai_fix_grammar`, `ai_gen`, `ai_mask`, `ai_similarity`, `ai_summarize`, `ai_translate`) and `ai_parse_document`
@@ -192,4 +207,5 @@ FROM ai_forecast(
 | `ai_classify` returns unexpected labels | Use clear, mutually exclusive label names. Fewer labels (2–5) produces more reliable results. |
 | `ai_query` raises on some rows in a batch job | Add `failOnError => false` — returns a STRUCT with `.response` and `.error` instead of raising. |
 | Batch job runs slowly | Use DBR **15.4 ML LTS** cluster (not serverless or interactive) for optimized batch inference throughput. |
+| Code wraps AI Functions in Python `ThreadPoolExecutor` / `asyncio` | AI Functions are engine-parallelized. Use a single SQL or PySpark statement on the full dataset. See [Scaling Best Practices](#scaling-best-practices). |
 | Want to swap models without editing pipeline code | Store all model names and prompts in `config.yml` — see [4-document-processing-pipeline.md](4-document-processing-pipeline.md) for the pattern. |

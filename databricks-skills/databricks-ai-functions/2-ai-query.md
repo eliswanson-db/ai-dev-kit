@@ -61,6 +61,8 @@ SELECT ai_query(
 
 ### Applied to a table column
 
+> **Scaling:** `ai_query` on a table column is automatically parallelized by the engine. Submit the full dataset in one query — see [Scaling Best Practices](SKILL.md#scaling-best-practices).
+
 ```sql
 SELECT ticket_id,
        ai_query(

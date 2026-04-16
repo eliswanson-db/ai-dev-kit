@@ -432,6 +432,7 @@ Unity Catalog renders entity relationship diagrams when primary and foreign key 
 5. **Partitioning by wrong column:** Partitioning by a column not used in filters causes full scans
 6. **Too many Liquid Clustering keys:** For tables under 10 TB, 2 keys often outperform 4 keys
 7. **Manual OPTIMIZE/VACUUM without predictive optimization:** Enable predictive optimization for Unity Catalog managed tables
+8. **Python concurrency around AI Functions:** AI Functions handle parallelization internally. Wrapping them in `ThreadPoolExecutor` or `asyncio` bypasses engine batching, scaling, and retry logic. Use a single SQL statement on the full dataset.
 
 ### Operational Anti-Patterns
 
